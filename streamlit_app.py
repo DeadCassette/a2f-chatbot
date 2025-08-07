@@ -23,25 +23,57 @@ def main():
         st.error("OPENAI_API_KEY not found in Streamlit secrets. Please add it.")
         st.stop()
 
-    # File uploader
+    # Load default document
+    default_document_path = "default_policy_document.pdf"  # You'll need to add this file to your repo
+    
+    # Check if default document exists
+    if os.path.exists(default_document_path):
+        st.info("📋 Default policy document loaded automatically")
+        default_vectorstore = process_document(default_document_path)
+    else:
+        st.warning("⚠️ Default policy document not found. Please upload a document.")
+        default_vectorstore = None
+
+    # File uploader for additional documents
     uploaded_file = st.file_uploader(
-        "Upload your club policy document (PDF or DOCX)",
+        "Upload additional policy documents (PDF or DOCX) - Optional",
         type=["pdf", "docx"]
     )
 
+    # Combine default and uploaded documents
     if uploaded_file is not None:
         # Create a temporary file to store the uploaded content
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
             tmp_file.write(uploaded_file.getvalue())
             tmp_file_path = tmp_file.name
 
-        vectorstore = process_document(tmp_file_path)
-
+        uploaded_vectorstore = process_document(tmp_file_path)
+        
         # Clean up the temporary file
         os.remove(tmp_file_path)
+        
+        # Combine vectorstores if both exist
+        if default_vectorstore and uploaded_vectorstore:
+            vectorstore = combine_vectorstores(default_vectorstore, uploaded_vectorstore)
+            st.success("✅ Default document + uploaded document processed successfully.")
+        elif uploaded_vectorstore:
+            vectorstore = uploaded_vectorstore
+            st.success("✅ Uploaded document processed successfully.")
+        else:
+            vectorstore = None
+    else:
+        vectorstore = default_vectorstore
 
         if vectorstore:
-            st.success("Document processed successfully. You can now ask questions.")
+            # Show which documents are loaded
+            st.success("✅ Documents processed successfully. You can now ask questions.")
+            
+            # Display loaded documents info
+            with st.expander("📚 Currently loaded documents"):
+                if default_vectorstore:
+                    st.write("• Default policy document")
+                if uploaded_file is not None:
+                    st.write(f"• Uploaded: {uploaded_file.name}")
             
             # Chatbot interface
             user_question = st.text_input("Ask a question about the policy document:")
@@ -94,6 +126,30 @@ def main():
                             if 'source' in doc.metadata:
                                 st.caption(f"Source: {os.path.basename(doc.metadata['source'])}")
 
+
+def combine_vectorstores(vectorstore1, vectorstore2):
+    """
+    Combines two FAISS vectorstores into one.
+    
+    Args:
+        vectorstore1: First FAISS vectorstore
+        vectorstore2: Second FAISS vectorstore
+        
+    Returns:
+        FAISS: Combined vectorstore
+    """
+    # Get all documents from both vectorstores
+    docs1 = vectorstore1.docstore._dict
+    docs2 = vectorstore2.docstore._dict
+    
+    # Combine all documents
+    all_docs = list(docs1.values()) + list(docs2.values())
+    
+    # Create new embeddings for combined documents
+    embeddings = OpenAIEmbeddings()
+    combined_vectorstore = FAISS.from_documents(all_docs, embeddings)
+    
+    return combined_vectorstore
 
 @st.cache_resource(show_spinner="Processing document and creating vector store...")
 def process_document(file_path):
