@@ -53,7 +53,10 @@ def main():
                     prompt_template = PromptTemplate(
                         input_variables=["context", "question"],
                         template=(
+                            "You are a helpful assistant answering questions about club policies. "
                             "Use the following pieces of context to answer the user's question. "
+                            "Look carefully for specific dates, deadlines, requirements, and procedures. "
+                            "If you find relevant information, provide it clearly and completely. "
                             "If you don't know the answer, just say you don't know.\n"
                             "----------------\n"
                             "{context}\n"
@@ -65,7 +68,12 @@ def main():
                     qa_chain = RetrievalQA.from_chain_type(
                         llm=ChatOpenAI(model="gpt-4o-mini", temperature=0),
                         chain_type="stuff",
-                        retriever=vectorstore.as_retriever(search_kwargs={'k': 3}),
+                        retriever=vectorstore.as_retriever(
+                            search_kwargs={
+                                'k': 5,  # Retrieve more chunks for better coverage
+                                'score_threshold': 0.7  # Only include relevant chunks
+                            }
+                        ),
                         return_source_documents=True,
                         chain_type_kwargs={"prompt": prompt_template}
                     )
@@ -110,11 +118,12 @@ def process_document(file_path):
         
         documents = loader.load()
 
-        # Chunk the document
+        # Chunk the document with better parameters for policy documents
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            separators=["\n\n", "\n", ".", " "]
+            chunk_size=1500,  # Increased chunk size to capture more context
+            chunk_overlap=300,  # Increased overlap to ensure important info isn't lost
+            separators=["\n\n", "\n", ".", "!", "?", ":", ";", " "],  # More separators for better chunking
+            length_function=len
         )
         texts = text_splitter.split_documents(documents)
 
