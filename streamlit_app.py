@@ -80,7 +80,9 @@ def main():
                     with st.expander("Show relevant sources"):
                         for doc in source_documents:
                             st.write("---")
-                            st.write(doc.page_content)
+                            # Clean up the text formatting by replacing multiple spaces and newlines
+                            cleaned_content = ' '.join(doc.page_content.split())
+                            st.write(cleaned_content)
                             if 'source' in doc.metadata:
                                 st.caption(f"Source: {os.path.basename(doc.metadata['source'])}")
 
