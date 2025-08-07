@@ -48,21 +48,26 @@ def main():
 
             if user_question:
                 with st.spinner("Searching for the answer..."):
+                    from langchain.prompts import PromptTemplate
+
+                    prompt_template = PromptTemplate(
+                        input_variables=["context", "question"],
+                        template=(
+                            "Use the following pieces of context to answer the user's question. "
+                            "If you don't know the answer, just say you don't know.\n"
+                            "----------------\n"
+                            "{context}\n"
+                            "Question: {question}\n"
+                            "Helpful answer:"
+                        )
+                    )
+
                     qa_chain = RetrievalQA.from_chain_type(
                         llm=ChatOpenAI(model="gpt-4o-mini", temperature=0),
                         chain_type="stuff",
                         retriever=vectorstore.as_retriever(search_kwargs={'k': 3}),
-                        return_source_documents=True
-                    )
-                    
-                    # Customize the prompt
-                    qa_chain.combine_documents_chain.llm_chain.prompt.template = (
-                        "Use the following pieces of context to answer the user's question. "
-                        "If you don't know the answer, just say that you don't know, don't try to make up an answer.\n"
-                        "----------------\n"
-                        "Context: {context}\n"
-                        "Question: {question}\n"
-                        "Helpful Answer:"
+                        return_source_documents=True,
+                        chain_type_kwargs={"prompt": prompt_template}
                     )
 
                     result = qa_chain({"query": user_question})
